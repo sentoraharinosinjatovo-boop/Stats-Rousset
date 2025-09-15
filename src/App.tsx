@@ -1,10 +1,10 @@
 import React, { useMemo, useRef, useState } from "react";
 import Papa from "papaparse";
 import * as pdfjsLib from "pdfjs-dist";
-import { GlobalWorkerOptions } from "pdfjs-dist";
-import pdfjsWorker from "pdfjs-dist/build/pdf.worker?url";
-
-GlobalWorkerOptions.workerSrc = pdfjsWorker;
+// ✅ Vite-friendly worker import for pdf.js v4
+// This bundles the worker and gives us a Worker constructor:
+import PDFWorker from "pdfjs-dist/build/pdf.worker.min.mjs?worker";
+(pdfjsLib as any).GlobalWorkerOptions.workerPort = new PDFWorker();
 
 import { Upload, FileUp, Download, Plus, Trash2 } from "lucide-react";
 
@@ -20,6 +20,8 @@ function groupBy<T,K extends string|number>(arr:T[], key:(x:T)=>K){ return arr.r
 const SAMPLE_ROWS: Row[] = [
   { Game:"G1", Date:"2025-09-01", Team:"ROU", Player:"Dupont", No:7, MIN:28, PTS:16, FGM:6, FGA:12, "3PM":2, "3PA":5, FTM:2, FTA:3, OREB:2, DREB:5, REB:7, AST:4, STL:1, BLK:0, TOV:2, PF:3 },
   { Game:"G1", Date:"2025-09-01", Team:"ROU", Player:"Martin", No:11, MIN:22, PTS:9,  FGM:4, FGA:10, "3PM":1, "3PA":3, FTM:0, FTA:0, OREB:1, DREB:3, REB:4, AST:2, STL:2, BLK:1, TOV:1, PF:2 },
+  { Game:"G2", Date:"2025-09-08", Team:"STV", Player:"Dupont", No:7, MIN:31, PTS:22, FGM:8, FGA:15, "3PM":3, "3PA":6, FTM:3, FTA:4, OREB:1, DREB:6, REB:7, AST:5, STL:0, BLK:1, TOV:3, PF:2 },
+  { Game:"G2", Date:"2025-09-08", Team:"STV", Player:"Martin", No:11, MIN:19, PTS:6,  FGM:3, FGA:8,  "3PM":0, "3PA":2, FTM:0, FTA:0, OREB:0, DREB:4, REB:4, AST:1, STL:1, BLK:0, TOV:1, PF:1 },
 ];
 
 export default function App(){
@@ -100,45 +102,128 @@ export default function App(){
   function downloadTemplate(){ const csv=Papa.unparse([COLS]); const blob=new Blob([csv+"\n"],{type:"text/csv;charset=utf-8;"}); const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url;a.download="template_stats_basket.csv";a.click();URL.revokeObjectURL(url) }
   function exportCSV(){ const csv=Papa.unparse(rows); const blob=new Blob([csv],{type:"text/csv;charset=utf-8;"}); const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url;a.download="stats_basket_export.csv";a.click();URL.revokeObjectURL(url) }
 
-  return (<div className="min-h-screen p-6">
-    <div className="mx-auto max-w-7xl space-y-6">
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold">Feuilles de stats – Calcul auto (PDF/CSV)</h1>
-        <div className="flex gap-2">
-          <button className="inline-flex items-center rounded-md border px-3 py-2 text-sm" onClick={downloadTemplate}><Download className="mr-2 h-4 w-4" /> Modèle CSV</button>
-          <button className="inline-flex items-center rounded-md border px-3 py-2 text-sm" onClick={exportCSV}><Download className="mr-2 h-4 w-4" /> Exporter CSV</button>
-        </div>
-      </header>
-      <section className="rounded-xl bg-white p-4 shadow">
-        <h2 className="mb-3 text-lg font-semibold">Importer / Saisir</h2>
-        <div className="flex flex-wrap items-center gap-3">
-          <input ref={fileRef} type="file" accept=".csv" onChange={(e)=>handleCSV(e.target.files)} className="max-w-sm" />
-          <button className="inline-flex items-center rounded-md border px-3 py-2 text-sm" onClick={()=>fileRef.current?.click()}><Upload className="mr-2 h-4 w-4" /> Importer CSV</button>
-          <input ref={pdfRef} type="file" accept="application/pdf" onChange={(e)=>handlePDF(e.target.files)} className="max-w-sm" />
-          <button className="inline-flex items-center rounded-md border px-3 py-2 text-sm" onClick={()=>pdfRef.current?.click()}><FileUp className="mr-2 h-4 w-4" /> Importer PDF (beta)</button>
-          <button className="inline-flex items-center rounded-md border px-3 py-2 text-sm" onClick={addEmptyRow}><Plus className="mr-2 h-4 w-4" /> Ajouter une ligne</button>
-        </div>
-        <p className="mt-2 text-sm text-gray-500">PDF pris en charge : maquette FFBB comme ton exemple. Si l'extraction échoue, passe par le CSV et envoie-moi le PDF pour adapter.</p>
-      </section>
-      <nav className="flex gap-2">
-        <button onClick={()=>setTab("data")} className={`rounded-md border px-3 py-1 text-sm ${tab==="data"?"bg-gray-900 text-white":"bg-white"}`}>Feuilles</button>
-        <button onClick={()=>setTab("players")} className={`rounded-md border px-3 py-1 text-sm ${tab==="players"?"bg-gray-900 text-white":"bg-white"}`}>Moyennes joueur</button>
-        <button onClick={()=>setTab("team")} className={`rounded-md border px-3 py-1 text-sm ${tab==="team"?"bg-gray-900 text-white":"bg-white"}`}>Équipe</button>
-      </nav>
-      <section className="rounded-xl bg-white p-0 shadow overflow-auto">
-        <table className="w-full text-sm">
-          <thead className="sticky top-0 bg-white shadow-sm">
-            <tr>{COLS.map(c => (<th key={c} className="px-3 py-2 text-left font-semibold border-b">{c}</th>))}<th className="px-3 py-2 text-left font-semibold border-b">Actions</th></tr>
-          </thead>
-          <tbody>{rows.map((r, i) => (
-            <tr key={i} className="odd:bg-gray-50">
-              {COLS.map(c => (<td key={c} className="px-3 py-2 border-b">{["Player","Game","Date","Team"].includes(c as string)?(<input className="w-40 rounded border px-2 py-1" value={String(r[c] ?? "")} onChange={e=>updateCell(i, c, e.target.value)} />):(<input className="w-24 rounded border px-2 py-1" inputMode="decimal" value={String(r[c] ?? 0)} onChange={e=>updateCell(i, c, e.target.value)} />)}</td>))}
-              <td className="px-3 py-2 border-b"><button className="inline-flex items-center rounded-md border px-2 py-1 text-xs" onClick={()=>removeRow(i)}><Trash2 className="mr-1 h-3 w-3" /> Suppr</button></td>
-            </tr>))}
-          </tbody>
-        </table>
-      </section>
-      <footer className="text-xs text-center text-gray-500 pt-4">Fait pour toi, Sento · Prototype local (aucune donnée envoyée côté serveur) · Import PDF (beta)</footer>
+  return (
+    <div className="min-h-screen p-6">
+      <div className="mx-auto max-w-7xl space-y-6">
+        <header className="flex flex-wrap items-center justify-between gap-3">
+          <h1 className="text-2xl font-bold">Feuilles de stats – Calcul auto (PDF/CSV)</h1>
+          <div className="flex gap-2">
+            <button className="inline-flex items-center rounded-md border px-3 py-2 text-sm" onClick={downloadTemplate}><Download className="mr-2 h-4 w-4" /> Modèle CSV</button>
+            <button className="inline-flex items-center rounded-md border px-3 py-2 text-sm" onClick={exportCSV}><Download className="mr-2 h-4 w-4" /> Exporter CSV</button>
+          </div>
+        </header>
+
+        <section className="rounded-xl bg-white p-4 shadow">
+          <h2 className="mb-3 text-lg font-semibold">Importer / Saisir</h2>
+          <div className="flex flex-wrap items-center gap-3">
+            <input ref={fileRef} type="file" accept=".csv" onChange={(e)=>handleCSV(e.target.files)} className="max-w-sm" />
+            <button className="inline-flex items-center rounded-md border px-3 py-2 text-sm" onClick={()=>fileRef.current?.click()}><Upload className="mr-2 h-4 w-4" /> Importer CSV</button>
+            <input ref={pdfRef} type="file" accept="application/pdf" onChange={(e)=>handlePDF(e.target.files)} className="max-w-sm" />
+            <button className="inline-flex items-center rounded-md border px-3 py-2 text-sm" onClick={()=>pdfRef.current?.click()}><FileUp className="mr-2 h-4 w-4" /> Importer PDF (beta)</button>
+            <button className="inline-flex items-center rounded-md border px-3 py-2 text-sm" onClick={addEmptyRow}><Plus className="mr-2 h-4 w-4" /> Ajouter une ligne</button>
+          </div>
+          <p className="mt-2 text-sm text-gray-500">PDF pris en charge : maquette FFBB comme ton exemple. Si l'extraction échoue, passe par le CSV et envoie-moi le PDF pour adapter.</p>
+        </section>
+
+        <nav className="flex gap-2">
+          <button onClick={()=>setTab("data")} className={`rounded-md border px-3 py-1 text-sm ${tab==="data"?"bg-gray-900 text-white":"bg-white"}`}>Feuilles</button>
+          <button onClick={()=>setTab("players")} className={`rounded-md border px-3 py-1 text-sm ${tab==="players"?"bg-gray-900 text-white":"bg-white"}`}>Moyennes joueur</button>
+          <button onClick={()=>setTab("team")} className={`rounded-md border px-3 py-1 text-sm ${tab==="team"?"bg-gray-900 text-white":"bg-white"}`}>Équipe</button>
+        </nav>
+
+        {tab==="data" && (
+          <section className="rounded-xl bg-white p-0 shadow overflow-auto">
+            <table className="w-full text-sm">
+              <thead className="sticky top-0 bg-white shadow-sm">
+                <tr>
+                  {COLS.map(c => (<th key={c} className="px-3 py-2 text-left font-semibold border-b">{c}</th>))}
+                  <th className="px-3 py-2 text-left font-semibold border-b">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r, i) => (
+                  <tr key={i} className="odd:bg-gray-50">
+                    {COLS.map(c => (
+                      <td key={c} className="px-3 py-2 border-b">
+                        {["Player","Game","Date","Team"].includes(c as string) ? (
+                          <input className="w-40 rounded border px-2 py-1" value={String(r[c] ?? "")} onChange={e=>updateCell(i, c, e.target.value)} />
+                        ) : (
+                          <input className="w-24 rounded border px-2 py-1" inputMode="decimal" value={String(r[c] ?? 0)} onChange={e=>updateCell(i, c, e.target.value)} />
+                        )}
+                      </td>
+                    ))}
+                    <td className="px-3 py-2 border-b">
+                      <button className="inline-flex items-center rounded-md border px-2 py-1 text-xs" onClick={()=>removeRow(i)}><Trash2 className="mr-1 h-3 w-3" /> Suppr</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </section>
+        )}
+
+        {tab==="players" && (
+          <section className="rounded-xl bg-white p-0 shadow overflow-auto">
+            <table className="w-full text-sm">
+              <thead className="sticky top-0 bg-white shadow-sm">
+                <tr>
+                  <th className="px-3 py-2 text-left border-b">Joueur</th>
+                  <th className="px-3 py-2 text-left border-b">MJ</th>
+                  <th className="px-3 py-2 text-left border-b">MIN</th>
+                  <th className="px-3 py-2 text-left border-b">PTS</th>
+                  <th className="px-3 py-2 text-left border-b">REB</th>
+                  <th className="px-3 py-2 text-left border-b">AST</th>
+                  <th className="px-3 py-2 text-left border-b">STL</th>
+                  <th className="px-3 py-2 text-left border-b">BLK</th>
+                  <th className="px-3 py-2 text-left border-b">TOV</th>
+                  <th className="px-3 py-2 text-left border-b">FG%</th>
+                  <th className="px-3 py-2 text-left border-b">3P%</th>
+                  <th className="px-3 py-2 text-left border-b">FT%</th>
+                  <th className="px-3 py-2 text-left border-b">eFG%</th>
+                  <th className="px-3 py-2 text-left border-b">TS%</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Object.values(playerAgg).map((p: any) => (
+                  <tr key={p.player} className="odd:bg-gray-50">
+                    <td className="px-3 py-2 border-b font-medium">{p.player}</td>
+                    <td className="px-3 py-2 border-b">{p.games}</td>
+                    <td className="px-3 py-2 border-b">{p.perGame.MIN.toFixed(1)}</td>
+                    <td className="px-3 py-2 border-b">{p.perGame.PTS.toFixed(1)}</td>
+                    <td className="px-3 py-2 border-b">{p.perGame.REB.toFixed(1)}</td>
+                    <td className="px-3 py-2 border-b">{p.perGame.AST.toFixed(1)}</td>
+                    <td className="px-3 py-2 border-b">{p.perGame.STL.toFixed(1)}</td>
+                    <td className="px-3 py-2 border-b">{p.perGame.BLK.toFixed(1)}</td>
+                    <td className="px-3 py-2 border-b">{p.perGame.TOV.toFixed(1)}</td>
+                    <td className="px-3 py-2 border-b">{p.rates.FG}</td>
+                    <td className="px-3 py-2 border-b">{p.rates.TP}</td>
+                    <td className="px-3 py-2 border-b">{p.rates.FT}</td>
+                    <td className="px-3 py-2 border-b">{p.rates.eFG}</td>
+                    <td className="px-3 py-2 border-b">{p.rates.TS}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </section>
+        )}
+
+        {tab==="team" && (
+          <section className="rounded-xl bg-white p-4 shadow">
+            <h3 className="mb-2 text-base font-semibold">Moyennes par match</h3>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 text-sm">
+              {Object.entries((teamAgg as any).perGame).map(([k,v]) => (
+                <div key={k} className="flex items-center justify-between rounded border p-2"><span className="font-medium">{k}</span><span>{Number(v as any).toFixed(1)}</span></div>
+              ))}
+            </div>
+            <h3 className="mt-4 mb-2 text-base font-semibold">Ratios</h3>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-sm">
+              {Object.entries((teamAgg as any).rates).map(([k,v]) => (
+                <div key={k} className="flex items-center justify-between rounded border p-2"><span className="font-medium">{k}</span><span>{v as any}</span></div>
+              ))}
+            </div>
+          </section>
+        )}
+      </div>
     </div>
-  </div>);
+  );
 }
