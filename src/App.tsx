@@ -1,7 +1,11 @@
 import React, { useMemo, useRef, useState } from "react";
 import Papa from "papaparse";
 import * as pdfjsLib from "pdfjs-dist";
-import "pdfjs-dist/build/pdf.worker.entry";
+import { GlobalWorkerOptions } from "pdfjs-dist";
+import pdfjsWorker from "pdfjs-dist/build/pdf.worker?url";
+
+GlobalWorkerOptions.workerSrc = pdfjsWorker;
+
 import { Upload, FileUp, Download, Plus, Trash2 } from "lucide-react";
 
 const COLS = ["Game","Date","Team","Player","No","MIN","PTS","FGM","FGA","3PM","3PA","FTM","FTA","OREB","DREB","REB","AST","STL","BLK","TOV","PF"] as const;
