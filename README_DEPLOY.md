@@ -1,4 +1,1 @@
-# Déploiement Vercel
-Local: npm i && npm run dev
-Build: npm run build (sortie dist/)
-Vercel: Importer le repo → Build npm run build → Output dist/
+Déploiement: npm i && npm run build (Vercel détecte Vite). pdf.js worker configuré pour Vite.

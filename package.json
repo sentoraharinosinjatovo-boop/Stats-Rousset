@@ -1,16 +1,14 @@
 {
   "name": "sento-stats-pdf-site",
   "private": true,
-  "version": "0.1.1",
+  "version": "0.1.2",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview"
   },
-  "engines": {
-    "node": ">=18"
-  },
+  "engines": { "node": ">=18" },
   "dependencies": {
     "lucide-react": "^0.439.0",
     "papaparse": "^5.4.1",
